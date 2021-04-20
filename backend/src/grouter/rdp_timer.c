@@ -21,7 +21,6 @@ RDP TIMER
 *****************************/
 void *rdp_run_timer(void *arg) {
 	struct rdp_timer_context *context= (struct rdp_timer_context *) arg;
-	printf("Running timer threada\n");
 
 	while(!context->shutdown){
 		struct timeb start;
