@@ -35,6 +35,10 @@ void rdp_init (int w_size,long timeout_length) {
 }
 
 void rdp_shutdown() {
+	if(snw_context->payload != NULL) {
+		free(snw_context->payload);
+	}
+
 	free(snw_context);
 	snw_context = NULL;
 
@@ -62,7 +66,15 @@ uint16_t get_actual_port_from_rdp_port(uint16_t rdp_port) {
 }
 
 void print_pcb(struct udp_pcb *pcb) {
-	printf("**********PCB*************\n local_port: %u \n remote_port: %u \n ********************** \n", pcb->local_port, pcb->remote_port);
+	printf("**********PCB************* \nlocal_address: ");
+	for(int i = 0; i<4; i++) {
+		printf("%x.", pcb->local_ip[i]);
+	}
+	printf("\n remote_address: ");
+	for(int i = 0; i<4; i++) {
+		printf("%x.", pcb->remote_ip[i]);
+	}
+	printf("\nlocal_port: %u \n remote_port: %u \n local_address: %u \n remote_address: %u \n********************** \n", pcb->local_port, pcb->remote_port);
 }
 
 
@@ -71,7 +83,6 @@ RDP STOP AND WAIT INTERFACE
 *****************************/
 
 struct stopnwait_context* rdp_stopnwait_init() {
-	printf("Initializing the snw contexta\n");
 	struct stopnwait_context *context = NULL;
 
 	context = (struct stopnwait_context *) malloc(sizeof(struct stopnwait_context));
@@ -82,6 +93,8 @@ struct stopnwait_context* rdp_stopnwait_init() {
 	context->waiting = 0;
 	context->next_seq_num = 0;
 	context->seq_num_expected_to_recv = 0;
+	context->pcb = NULL;
+	context->payload = NULL;
 
 	return context;
 }
@@ -89,7 +102,7 @@ struct stopnwait_context* rdp_stopnwait_init() {
 err_t
 rdp_stopnwait_send(struct udp_pcb *pcb, struct pbuf *p)
 {
-	printf("\n\n%s\n", "Inside send!");
+	// printf("\n\n%s\n", "Inside send!");
 	// print_pcb(pcb);
 	// printf("CONTEXT: waiting: %d, next seq: %u \n", snw_context->waiting, snw_context->next_seq_num);
 
@@ -105,7 +118,7 @@ rdp_stopnwait_send(struct udp_pcb *pcb, struct pbuf *p)
 	//Check if space in window
 	if(snw_context->waiting) {
 		//If not then we refuse data
-		printf("%s\n", "Waiting for acknowledgements try again later.");
+		printf("Still waiting for acknowledgements for message %s", (char *)snw_context->payload);
 		return ERR_OK;
 	}
 	// printf("%s\n", "Not waiting! Can send the tea");
@@ -128,8 +141,14 @@ rdp_stopnwait_send(struct udp_pcb *pcb, struct pbuf *p)
 
 	//Store the pcb and p in the context
 	snw_context->pcb = pcb;
-	snw_context->payload = (char *)p->payload;
-	// printf("Stored pbuf p payload: %s\n", (char*) snw_context->payload);
+
+	if(snw_context->payload != NULL) {
+		printf("Freeing payload\n");
+		free(snw_context->payload);
+	}
+	snw_context->payload = (char *) malloc(strlen(p->payload) +1);
+	strcpy(snw_context->payload, p->payload);
+	printf("Stored pbuf p payload: %s\n", (char*) snw_context->payload);
 
 	//Send to udp
 	err_t err = udp_send(pcb, p);
@@ -154,9 +173,9 @@ void rdp_stopnwait_recv_callback (
 	uint16_t port
 )
 {
-	printf("\nIn stop and wait receive\n");
+	// printf("\nIn stop and wait receive\n");
 	// print_pcb(pcb);
-	printf("DEBUG: %s\n", (char *)p->payload);
+	// printf("DEBUG: %s\n", (char *)p->payload);
 
 	//retrieve sequence number
 	uint16_t seq_num = get_seq_num_from_rdp_port(port);
@@ -175,11 +194,12 @@ void rdp_stopnwait_recv_callback (
     //If it is an ack packet and for the sequence number we are waiting for then we update the context
     uint16_t seq_num_expected = abs(snw_context->next_seq_num -1)%2;
     if(is_ack_packet) {
-    	printf("Previous sequence number that was sent was %u\n", seq_num_expected);
+    	// printf("Previous sequence number that was sent was %u\n", seq_num_expected);
 
     	if(seq_num == seq_num_expected){
-    		printf("Got ack for sequence number: %d\n", seq_num);
+    		// printf("Got ack for sequence number: %d\n", seq_num);
     		snw_context->waiting = 0;
+    		printf("Got acknowledgement.\n");
     		//Reset the timer
     		rdp_timer_reset(snw_timer_context);
     	}
@@ -188,30 +208,36 @@ void rdp_stopnwait_recv_callback (
     } 
     //Otherwise we got a proper packet from someone else and should send an acknowledgement
     else {
-    	printf("Expected to receive sequence number %u, and received sequence number %u\n", snw_context->seq_num_expected_to_recv, seq_num);
+    	// printf("Expected to receive sequence number %u, and received sequence number %u\n", snw_context->seq_num_expected_to_recv, seq_num);
 
     	if(seq_num == snw_context->seq_num_expected_to_recv) {
     		//Got a correctly ordered packet
-    		printf("Entering odinsleep\n");
-    		sleep(5);
-    		printf("I am awkake!\n");
+    		// printf("Entering odinsleep\n");
+    		// sleep(5);
+    		// printf("I am awkake!\n");
     		//Update the sequence number we expect to receive after this
     		snw_context->seq_num_expected_to_recv = (seq_num + 1)%2;
     		// printf("next sequenece number expected to be received is now %u\n", snw_context->seq_num_expected_to_recv);
     		//Deliver the packet
-    		printf("RDP: %s\n", (char *)p->payload);
+    		printf("RDP: %s", (char *)p->payload);
     	} 
     	else{
-    		printf("Already delivered seq num %u\n", seq_num);
+    		// printf("Already delivered seq num %u\n", seq_num);
     	}
 
     	//send back an ack packet to sender
     	uint16_t local_port = pcb -> local_port;
     	pcb->local_port = add_seq_num_to_port(seq_num, add_ack_to_port(local_port));
-    	print_pcb(pcb);
-    	udp_send(pcb, p);
+    	// print_pcb(pcb);
+    	char *payload = "ack!!!";
+    	struct pbuf *ack_p = pbuf_alloc(PBUF_TRANSPORT, strlen(payload), PBUF_RAM);
+    	ack_p->payload = payload;
+
+    	// printf("Sending ack with payload: %s\n", (char *)ack_p->payload);
+    	udp_send(pcb, ack_p);
     	pcb->local_port = local_port;
-    	printf("Done sending ack back\n");
+
+    	// printf("Done sending ack back\n");
     }
 }
 
@@ -220,13 +246,15 @@ void rdp_stopnwait_resend_packet(void *arg) {
 
 	struct udp_pcb *pcb = context->pcb;
 	struct pbuf *p = pbuf_alloc(PBUF_TRANSPORT, strlen(context->payload), PBUF_RAM);
-    p->payload = context->payload;
+	char payload[DEFAULT_MTU];
+	strcpy(payload, context->payload);
+    p->payload = payload;
 	// printf("In resend, the payload is %s %s\n", (char *)context->payload, (char*)p->payload);
 
 	uint16_t actual_port = pcb->local_port;
 	pcb->local_port = add_seq_num_to_port(abs(snw_context->next_seq_num -1)%2, actual_port);
-	printf("Sending packet again!\n");
-	print_pcb(pcb);
+	// printf("Sending packet again!\n");
+	// print_pcb(pcb);
 	udp_send(pcb, p);
 
 	//Reset the pcb's local port to the actual port without the sequence number.
