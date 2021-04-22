@@ -79,7 +79,12 @@ err_t            				rdp_stopnwait_send       		(struct udp_pcb *pcb, struct pbu
 /**
  * Resends the last packet based off of the stopnwait_context it is given as an argument
  */
-void 			 rdp_stopnwait_resend_packet	(void *arg);
+void 			 				rdp_stopnwait_resend_packet		(void *arg);
+
+/**
+ * Cleanup when shutting down the service
+ */
+void							rdp_stopnwait_shutdown			();
 
 
 
