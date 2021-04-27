@@ -86,42 +86,4 @@ void 			 				rdp_stopnwait_resend_packet		(void *arg);
  */
 void							rdp_stopnwait_shutdown			();
 
-
-
-/*****************************
-RDP GO BACK N INTERFACE
-*****************************/
-
-struct gobackn_context {
-	int send_base;	/*new*/					//earliest packet sent for which we wait for ack
-	int next_seq_num;				        //next packet ready to be sent
-	int waiting;  /*may not be necessary*/	//0 if not waiting, 1 if waiting for a ack
-	struct udp_pcb *pcb;				    //The pcb sent
-	char *payload;						    //The payload that was sent
-	uint16_t seq_num_expected_to_recv;	    //The seq num the receiver is expected to get
-};
-/**
- * To initialize the go-back-n context
- */
-struct gobackn_context*			rdp_gobackn_init				();
-
-/**
- * The receive callback that runs the go-back-n routine
- */
-void			 				rdp_gobackn_recv_callback		(void *arg, struct udp_pcb *pcb, struct pbuf *p, uchar *addr, uint16_t port, int seq_num);
-/**
- * To send using the go-back-n procedure.
- */
-err_t            				rdp_gobackn_send     	  		(struct udp_pcb *pcb, struct pbuf *p);
-
-/**
- * Resends the last packet based off of the go-back-n if timeout. It is given as an argument
- */
-void 			 				rdp_gobackn_resend_packet		(void *arg);
-
-/**
- * Cleanup when shutting down the service
- */
-void							rdp_gobackn_shutdown			();
-
 #endif // ifndef __RD_H_
