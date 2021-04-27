@@ -19,10 +19,12 @@
 
 int window_size=0;
 long timeout;
+int old_seq_num = 0;
 
 // Global context for stop and wait
 struct stopnwait_context *snw_context = NULL;
 
+struct gobackn_context *gbn_context = NULL;
 // Global context for the stop and wait timer
 struct rdp_timer_context *snw_timer_context;
 
@@ -267,3 +269,117 @@ void rdp_stopnwait_shutdown() {
 	rdp_timer_shutdown(snw_timer_context);
 }
 
+/*****************************
+RDP GO-BACK-N INTERFACE
+*****************************/
+
+struct gobackn_context*	rdp_gobackn_init (){
+// Allocate space for the new context
+	struct gobackn_context *context = NULL;
+	context = (struct gobackn_context *) malloc(sizeof(struct gobackn_context));
+	if(context == NULL) {
+		printf("Error initializing the stop and wait context.\n");
+	}
+	printf("currently initializing gobackn...\n");
+	//Initialize the new context's values
+
+	context->send_base = 0;					
+	context->next_seq_num = 0;				
+	context->waiting = 0;						
+	context->pcb = NULL;						
+	context->payload = NULL;						
+	context->seq_num_expected_to_recv = 0;
+
+	return context;
+}
+
+void rdp_gobackn_recv_callback (
+	void *arg, 
+	struct udp_pcb *pcb, 
+	struct pbuf *p, 
+	uchar *addr, 
+	uint16_t port,
+	int seq_num)
+{
+	printf("in callback\n");
+	//we already have the seq_num as an argument, can
+	//verify if it is in the correct order
+
+	//have latest sequence number received as global var old_seq_num 
+
+	//Is it an ack packet -- can still use this for go-back-n
+	int is_ack_packet = get_ack_flag_from_rdp_port(port);
+	printf("is it an ack packet? %d \n", is_ack_packet); //1 meaning yes
+
+	//Retrieve the actual port from the port received
+	uint16_t actual_port = get_actual_port_from_rdp_port(port);
+	printf("what is the actual port? %d\n", actual_port);
+
+    uchar ipaddr_network_order[4];
+    gHtonl(ipaddr_network_order, addr);
+    udp_connect(arg, ipaddr_network_order, actual_port);
+
+    //The sequence number we are waiting on after having sent it
+    int seq_num_expected = old_seq_num+1;
+
+    printf("seq_num is %d, seq_num_expected is %d", seq_num,seq_num_expected);
+    if(is_ack_packet) {
+    	//If it is an ack packet and for the sequence number we are waiting for then we update the context
+    	if(seq_num == seq_num_expected){
+
+		}
+	}
+
+}
+
+
+err_t rdp_gobackn_send (struct udp_pcb *pcb, struct pbuf *p){
+	//For now if the current port being used does not have a valid rdp port format (bits captured by mask should be 0)
+	//then hardcode the local port to be 5012
+	int not_valid_rdp_port = pcb->local_port & RDP_VALID_RDP_PORT_MASK;
+	if(not_valid_rdp_port){
+		pcb->local_port = 5012;
+	}
+
+	//there is no need to wait for an acknowledgement for go-back-n
+
+	//Check to see if packet in the window
+	if(gbn_context->next_seq_num<window_size+gbn_context->send_base){
+		printf("We are in the window, cur is %d, window is %d", gbn_context->next_seq_num, (window_size+gbn_context->send_base));
+	}
+
+	//below is the same as the rdp_stopnwait_send:
+
+	//Get the next sequence number to use 
+	int next_seq_num = gbn_context -> next_seq_num;
+	//Update the next available sequence number in the context
+	gbn_context->next_seq_num = (next_seq_num + 1);
+
+	//Save the actual local port to reset pcb after all is done
+	uint16_t actual_port = pcb->local_port;
+
+
+	//Send to udp
+	err_t err = udp_send(pcb, p);
+
+	return err;
+}
+
+void rdp_gobackn_resend_packet (void *arg){
+	//may be used if there's a timeout?
+}
+
+void rdp_gobackn_shutdown (){
+	if(gbn_context != NULL) {
+		if(gbn_context->payload != NULL) {
+			free(gbn_context->payload);
+		}
+
+		free(gbn_context);
+		gbn_context = NULL;
+	}
+	
+
+	rdp_timer_shutdown(gbn_timer_context);
+
+}
