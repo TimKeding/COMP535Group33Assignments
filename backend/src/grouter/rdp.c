@@ -323,7 +323,7 @@ void rdp_gobackn_recv_callback (
     udp_connect(arg, ipaddr_network_order, actual_port);
 
     //The sequence number we are waiting on after having sent it
-    int seq_num_expected = old_seq_num+1;
+    int seq_num_expected = (old_seq_num+1)%MAX_N_CALLBACK;
 
     printf("seq_num is %d, seq_num_expected is %d", seq_num,seq_num_expected);
     if(is_ack_packet) {
@@ -369,7 +369,9 @@ err_t rdp_gobackn_send (struct udp_pcb *pcb, struct pbuf *p){
 	uint16_t actual_port = pcb->local_port;
 
 	//Set waiting for ack in context
-	gbn_context->waiting = 1;
+	if(gbn_context->num_pcb_stored == MAX_N_CALLBACK) {
+		gbn_context->waiting = 1;
+	}
 
 	err_t err = NULL;
 
@@ -402,7 +404,7 @@ err_t rdp_gobackn_send (struct udp_pcb *pcb, struct pbuf *p){
 		pcb -> local_port = actual_port;
 
 	}
-	
+
 	return err;
 }
 
@@ -429,7 +431,7 @@ void rdp_gobackn_resend_packet (void *arg){
     	//Keep local port to be able to sanitize pcb after all of this
 		uint16_t actual_port = pcb->local_port;
 		//Add the sequence number that was last send to the port
-		pcb->local_port = add_seq_num_to_port(abs(snw_context->next_seq_num -1)%2, actual_port);
+		pcb->local_port = add_seq_num_to_port(abs(gbn_context->next_seq_num -1)%2, actual_port);
 
 		//Resend the packet
 		udp_send(pcb, p);
