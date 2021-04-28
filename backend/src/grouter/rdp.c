@@ -321,8 +321,8 @@ void rdp_gobackn_recv_callback (
 	printf("pcb port: %d\n", pcb->local_port); //5000
 	//Is it an ack packet -- can still use this for go-back-n
 	int is_ack_packet = get_ack_flag_from_rdp_port(port);
-	printf("is it an ack packet? %d \n", is_ack_packet); //1 meaning yes
-	printf("12/10 hoping it gives 1, then would take away 1 to give 0");
+	//printf("is it an ack packet? %d \n", is_ack_packet); //1 meaning yes
+	//printf("12/10 hoping it gives 1, then would take away 1 to give 0");
 	printf("%d\n", ((5012-5000)/10)-1);
 
 	//Retrieve the sequence number of the packet:
