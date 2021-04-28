@@ -178,7 +178,7 @@ void             udp_init       (void);
 #if UDP_DEBUG
 void udp_debug_print(struct udp_hdr *udphdr);
 #else
-#define udp_debug_print(udphdr)
+#define udp_debug_print2(udphdr)
 #endif
 
 #ifdef __cplusplus

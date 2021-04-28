@@ -752,7 +752,7 @@ void gncCmd() {
             long timeout=1000;
 
             rdp_mode = 1;
-
+            
             next_tok = strtok(NULL, " \n");
             if(!strcmp(next_tok, "-g")) {
                 recv_callback = rdp_gobackn_recv_callback;
