@@ -95,7 +95,7 @@ struct gobackn_context {
 	int send_base;	/*new*/					//earliest packet sent for which we wait for ack
 	int next_seq_num;				        //next packet ready to be sent
 	int waiting; 							//0 if not waiting, 1 if waiting for a ack
-	struct udp_pcb pcb[MAX_N_CALLBACK];    //The pcb sent
+	struct udp_pcb pcb[MAX_N_CALLBACK];     //The pcb sent
 	uint16_t num_pcb_stored;				//The number of pcb stored
 	uint16_t seq_start;
 	char payload[MAX_N_CALLBACK];		    //The payload that was sent
@@ -109,7 +109,7 @@ struct gobackn_context*			rdp_gobackn_init				();
 /**
  * The receive callback that runs the go-back-n routine
  */
-void			 				rdp_gobackn_recv_callback		(void *arg, struct udp_pcb *pcb, struct pbuf *p, uchar *addr, uint16_t port, int seq_num);
+void			 				rdp_gobackn_recv_callback		(void *arg, struct udp_pcb *pcb, struct pbuf *p, uchar *addr, uint16_t port);
 /**
  * To send using the go-back-n procedure.
  */
