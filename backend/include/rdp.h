@@ -6,6 +6,7 @@
 #define RDP_ACK_MASK					0x0001		//The mask for recovering whether this is an ack or not from the port number
 #define RDP_SEQ_NUM_MASK				0x0002		//The mask for the seq number in the port number
 #define RDP_VALID_RDP_PORT_MASK			0x0003		//The mask to make sure that a port is a proper rdp port
+#define MAX_N_CALLBACK					50
 
 /*****************************
 GENERAL RDP INTERFACE
@@ -57,7 +58,7 @@ RDP STOP AND WAIT INTERFACE
 struct stopnwait_context {
 	int waiting;						//0 if not waiting, 1 if waiting for a ack
 	uint16_t next_seq_num;				//The next sequence number to use for sending
-	struct udp_pcb *pcb;				//The pcb sent
+	struct udp_pcb *pcb;				//The pcbs sent
 	char *payload;						//The payload that was sent
 	uint16_t seq_num_expected_to_recv;	//The seq num the receiver is expected to get
 };
@@ -94,8 +95,11 @@ struct gobackn_context {
 	int send_base;	/*new*/					//earliest packet sent for which we wait for ack
 	int next_seq_num;				        //next packet ready to be sent
 	int waiting;  /*may not be necessary*/	//0 if not waiting, 1 if waiting for a ack
-	struct udp_pcb *pcb;				    //The pcb sent
-	char *payload;						    //The payload that was sent
+	struct udp_pcb *pcb[MAX_N_CALLBACK];    //The pcb sent
+	uint16_t num_pcb_stored;				//The number of pcb stored
+	uint16_t pcb_start;
+	uint16_t pcb_end;
+	char *payload[MAX_N_CALLBACK];		    //The payload that was sent
 	uint16_t seq_num_expected_to_recv;	    //The seq num the receiver is expected to get
 };
 /**

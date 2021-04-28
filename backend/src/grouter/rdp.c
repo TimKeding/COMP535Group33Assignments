@@ -286,8 +286,11 @@ struct gobackn_context*	rdp_gobackn_init (){
 	context->send_base = 0;					
 	context->next_seq_num = 0;				
 	context->waiting = 0;						
-	context->pcb = NULL;						
-	context->payload = NULL;						
+	// context->pcb[MAX_N_CALLBACK] = NULL;
+	context->num_pcb_stored = 0;
+	context->pcb_start = 0;
+	context->pcb_end = 0;					
+	// context->payload = NULL;						
 	context->seq_num_expected_to_recv = 0;
 
 	return context;
@@ -326,10 +329,17 @@ void rdp_gobackn_recv_callback (
     if(is_ack_packet) {
     	//If it is an ack packet and for the sequence number we are waiting for then we update the context
     	if(seq_num == seq_num_expected){
-
+    		if(gbn_context->waiting) {
+    			printf("Got acknowledgement.\n");
+    			
+    		}
+    		gbn_context->pcb_start = (gbn_context->pcb_start + 1) % MAX_N_CALLBACK;
+    		gbn_context->num_pcb_stored--;
+    		if(gbn_context->num_pcb_stored == 0) {
+    			//stop timer
+    		}
 		}
 	}
-
 }
 
 
@@ -358,15 +368,76 @@ err_t rdp_gobackn_send (struct udp_pcb *pcb, struct pbuf *p){
 	//Save the actual local port to reset pcb after all is done
 	uint16_t actual_port = pcb->local_port;
 
+	//Set waiting for ack in context
+	gbn_context->waiting = 1;
 
-	//Send to udp
-	err_t err = udp_send(pcb, p);
+	err_t err = NULL;
 
+	//Store the pcb in the context in case we need to resend
+	if(gbn_context->num_pcb_stored <= MAX_N_CALLBACK) {
+		gbn_context->pcb[gbn_context->pcb_end] = pcb;
+			
+		//Make sure to free if there was already a payload in the context from before
+		if(gbn_context->payload[gbn_context->pcb_end] != NULL) {
+			free(gbn_context->payload[gbn_context->pcb_end]);
+			gbn_context->payload[gbn_context->pcb_end] = NULL;
+		}
+
+		//Allocate space in the context to remember the payload in case we need to resend it
+		//Note that the +1 is important to allow for null termination
+		gbn_context->payload[gbn_context->pcb_end] = (char *) malloc(strlen(p->payload) +1);
+		//Copy the current payload into the context
+		strcpy(gbn_context->payload[gbn_context->pcb_end], p->payload);
+
+		gbn_context->pcb_end = (gbn_context->pcb_end + 1) % MAX_N_CALLBACK;
+		gbn_context->num_pcb_stored++;
+
+		//Send to udp
+		err = udp_send(pcb, p);
+
+		//set timer
+		// rdp_timer_start(gbn_timer_context);
+
+		//Reset the pcb so that we have the proper port for next time
+		pcb -> local_port = actual_port;
+
+	}
+	
 	return err;
 }
 
 void rdp_gobackn_resend_packet (void *arg){
-	//may be used if there's a timeout?
+	struct gobackn_context *context = (struct gobackn_context *) arg;
+
+	//Retrive the pcb representing the connection from the context
+	// struct udp_pcb *pcbArray[] = context->pcb;
+	struct udp_pcb *pcb_array[MAX_N_CALLBACK];
+	memcpy(pcb_array, context->pcb, MAX_N_CALLBACK);
+	//Allocate a new pbuffer in which to resend the message
+
+    for(uint16_t i = context->pcb_start; i != context->pcb_end; i = (i+1)%MAX_N_CALLBACK) {
+    	struct udp_pcb *pcb = pcb_array[i];
+
+    	struct pbuf *p = pbuf_alloc(PBUF_TRANSPORT, strlen(context->payload[i]), PBUF_RAM);
+    	//copy the payload into a new buffer
+		char payload[DEFAULT_MTU];
+		strcpy(payload, context->payload[i]);
+		//Set the pbuf's payload
+	    p->payload = payload;
+
+
+    	//Keep local port to be able to sanitize pcb after all of this
+		uint16_t actual_port = pcb->local_port;
+		//Add the sequence number that was last send to the port
+		pcb->local_port = add_seq_num_to_port(abs(snw_context->next_seq_num -1)%2, actual_port);
+
+		//Resend the packet
+		udp_send(pcb, p);
+
+		//Reset the pcb's local port to the actual port without the sequence number.
+		pcb->local_port = actual_port;
+    }
+    
 }
 
 void rdp_gobackn_shutdown (){
@@ -380,6 +451,6 @@ void rdp_gobackn_shutdown (){
 	}
 	
 
-	rdp_timer_shutdown(gbn_timer_context);
+	// rdp_timer_shutdown(gbn_timer_context);
 
 }
