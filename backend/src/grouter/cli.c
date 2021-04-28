@@ -752,10 +752,18 @@ void gncCmd() {
             long timeout=1000;
 
             rdp_mode = 1;
-            recv_callback = rdp_stopnwait_recv_callback;
-            send_fn = rdp_stopnwait_send;
 
             next_tok = strtok(NULL, " \n");
+            if(!strcmp(next_tok, "-g")) {
+                recv_callback = rdp_gobackn_recv_callback;
+                send_fn = rdp_gobackn_send;
+
+                next_tok = strtok(NULL, " \n");
+            } else {
+                recv_callback = rdp_stopnwait_recv_callback;
+                send_fn = rdp_stopnwait_send;
+            }
+            
             if(!strcmp(next_tok, "-ws")) {
                 next_tok = strtok(NULL, " \n");
                 window_size = atoi(next_tok);
