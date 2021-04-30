@@ -337,6 +337,7 @@ void rdp_gobackn_recv_callback (
 
 	//Retrieve the sequence number of the packet:
 	uint16_t sequence_number = get_seq_num_from_rdp_gbn_port(port);
+	printf("port: %d, seq_num: %d\n", port, sequence_number);
 	//Retrieve actual port:
 	uint16_t actual_port = get_actual_port_from_rdp_gbn_port(port);
 
@@ -349,26 +350,25 @@ void rdp_gobackn_recv_callback (
 	uint16_t seq_num_expected = gbn_context->seq_start;
 	if(is_ack_packet) {
     	// If it is an ack packet and for the sequence number we are waiting for then we update the context
-    	int pos = -1;
-    	printf("348\n");
-    	/*for(int i=seq_num_expected; i != (seq_num_expected + gbn_context->num_pcb_stored-1)%MAX_N_CALLBACK; i = (i+1)%MAX_N_CALLBACK) {
-    		    	printf("seq_num_expected: %d\n", seq_num_expected);
-    		    	printf("gbn_context->num_pcb_stored: %d\n",gbn_context->num_pcb_stored);
-    		    	printf("350\n");
-    		if(i == sequence_number) {
-    			pos = i;
-    		}
-    		i++;
-
-    	}*/
-    	if(sequence_number == seq_num_expected) {
-    		printf("sequence_number: %d\n", sequence_number);
-    		pos = sequence_number;
-    	}
-		if(pos != -1){
-			gbn_context->seq_start = (gbn_context->seq_start + (pos - seq_num_expected+1)) % MAX_N_CALLBACK;
+    	// int result = -1;
+    	// int counter = 0;
+    	// int pos = seq_num_expected;
+    	// bool found = 0;
+    	// while(!found && counter < MAX_N_CALLBACK) {
+    	// 	if(pos == sequence_number) {
+    	// 		result = pos;
+    	// 		found = 1;
+    	// 	}
+    	// 	pos = (pos+1)%MAX_N_CALLBACK;
+    	// 	counter++;
+    	// }
+		if(sequence_number == seq_num_expected){
+			gbn_context->seq_start = (gbn_context->seq_start + 1) % MAX_N_CALLBACK;
 			printf("gbn_context->seq_start: %d\n", gbn_context->seq_start);
-			gbn_context->num_pcb_stored = gbn_context->num_pcb_stored - (pos - seq_num_expected+1);
+			gbn_context->num_pcb_stored = gbn_context->num_pcb_stored - 1;
+			// gbn_context->seq_start = (gbn_context->seq_start + (result - seq_num_expected+1)) % MAX_N_CALLBACK;
+			// printf("gbn_context->seq_start: %d\n", gbn_context->seq_start);
+			// gbn_context->num_pcb_stored = gbn_context->num_pcb_stored - (result - seq_num_expected+1);
 			printf("gbn_context->num_pcb_stored: %d\n", gbn_context->num_pcb_stored);
 			if(gbn_context->num_pcb_stored < MAX_N_CALLBACK) {
 				gbn_context->waiting = 0;
@@ -452,7 +452,7 @@ err_t rdp_gobackn_send (struct udp_pcb *pcb, struct pbuf *p){
 	//printf("the actual port is: %d\n", actual_port);
 
 	//hiding the seq num in the port:
-	pcb -> local_port = add_seq_num_to_gbn_port(cur_seq_num , actual_port);
+	pcb -> local_port = add_seq_num_to_port(cur_seq_num , actual_port);
 	//printf("changed port number, should be 5012+0=5012: %d", pcb -> local_port);
 	printf("cur_seq_num: %d\n", cur_seq_num);
 	printf("next_seq_num: %d\n", gbn_context->next_seq_num);
@@ -474,6 +474,8 @@ err_t rdp_gobackn_send (struct udp_pcb *pcb, struct pbuf *p){
 
 	 //reseting the port:
 	 pcb->local_port = actual_port;
+	 struct udp_pcb *test = &(gbn_context->pcb[cur_seq_num]);
+	 printf("stored pcb port: %d\n local port: %d\n", test->local_port, pcb->local_port);
 
 	return err;
 }
@@ -481,7 +483,13 @@ err_t rdp_gobackn_send (struct udp_pcb *pcb, struct pbuf *p){
 void rdp_gobackn_resend_packet (void *arg){
 	struct gobackn_context *context = (struct gobackn_context *) arg;
 
-	for(uint16_t i = context->seq_start; i != context->next_seq_num; i = (i+1)%MAX_N_CALLBACK) {
+	printf("resend start: %d, %d\n",context->seq_start, context->next_seq_num);
+	int end = context->next_seq_num;
+	if(context->seq_start == end && context->num_pcb_stored == MAX_N_CALLBACK) {
+		end = (end-1)%MAX_N_CALLBACK;
+	}
+
+	for(uint16_t i = context->seq_start; i != end; i = (i+1)%MAX_N_CALLBACK) {
 		struct udp_pcb *pcb = &(context->pcb[i]);
 		//Allocate a new pbuffer in which to resend the message		
 		struct pbuf *p = pbuf_alloc(PBUF_TRANSPORT, strlen(&(context->payload[i])), PBUF_RAM);
@@ -494,7 +502,7 @@ void rdp_gobackn_resend_packet (void *arg){
     	//Keep local port to be able to sanitize pcb after all of this
 		uint16_t actual_port = pcb->local_port;
 		//Add the sequence number that was last send to the port
-		pcb->local_port = add_seq_num_to_port(i, actual_port);
+		// pcb->local_port = add_seq_num_to_port(i, actual_port);
 
 		//Resend the packet
 		udp_send(pcb, p);
