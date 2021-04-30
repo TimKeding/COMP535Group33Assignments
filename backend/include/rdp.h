@@ -5,8 +5,9 @@
 
 #define RDP_ACK_MASK					0x0001		//The mask for recovering whether this is an ack or not from the port number
 #define RDP_SEQ_NUM_MASK				0x0002		//The mask for the seq number in the port number
-#define RDP_VALID_RDP_PORT_MASK			0x0003		//The mask to make sure that a port is a proper rdp port
-#define MAX_N_CALLBACK					50
+#define RDP_GBN_SEQ_NUM_MASK			0x003E
+#define RDP_VALID_RDP_PORT_MASK			0x001F		//The mask to make sure that a port is a proper rdp port
+#define MAX_N_CALLBACK					32
 
 /*****************************
 GENERAL RDP INTERFACE

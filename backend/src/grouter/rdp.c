@@ -68,12 +68,22 @@ uint16_t get_seq_num_from_rdp_port(uint16_t rdp_port) {
 	return (rdp_port & RDP_SEQ_NUM_MASK) >> 1;
 }
 
+uint16_t get_seq_num_from_rdp_gbn_port(uint16_t rdp_port) {
+	//Since the seq nums start at the second bit, shift one bit down to get
+	//actual sequence number
+	return (rdp_port & RDP_GBN_SEQ_NUM_MASK) >> 1;
+}
+
 uint16_t get_ack_flag_from_rdp_port(uint16_t rdp_port) {
 	return rdp_port & RDP_ACK_MASK;
 }
 
 uint16_t get_actual_port_from_rdp_port(uint16_t rdp_port) {
 	return rdp_port - (get_seq_num_from_rdp_port(rdp_port)<<1) - get_ack_flag_from_rdp_port(rdp_port);
+}
+
+uint16_t get_actual_port_from_rdp_gbn_port(uint16_t rdp_port) {
+	return rdp_port - (get_seq_num_from_rdp_gbn_port(rdp_port)<<1) - get_ack_flag_from_rdp_port(rdp_port);
 }
 
 void print_pcb(struct udp_pcb *pcb) {
@@ -118,7 +128,7 @@ rdp_stopnwait_send(struct udp_pcb *pcb, struct pbuf *p)
 	//then hardcode the local port to be 5012
 	int not_valid_rdp_port = pcb->local_port & RDP_VALID_RDP_PORT_MASK;
 	if(not_valid_rdp_port){
-		pcb->local_port = 5012;
+		pcb->local_port = 8192;
 	}
 
 	//Make sure to only proceed if we're not already waiting for an acknowledgement
@@ -312,24 +322,18 @@ void rdp_gobackn_recv_callback (
 	uchar *addr, 
 	uint16_t port)
 {
-	printf("in callback\n");
-	//cannot keep the sequence number as an argument, hide it in the port
-	//since also using ack mask,
-
-	//have latest sequence number received as global var old_seq_num 
-	printf("port: %d\n", port); //this gives me the modified port with the seq num 5012
-	printf("pcb port: %d\n", pcb->local_port); //5000
+	//have latest sequence number received as global var old_seq_num
+	// printf("port: %d\n", port); //this gives me the modified port with the seq num 4096
+	// printf("pcb port: %d\n", pcb->local_port); //5000
 	//Is it an ack packet -- can still use this for go-back-n
 	int is_ack_packet = get_ack_flag_from_rdp_port(port);
 	//printf("is it an ack packet? %d \n", is_ack_packet); //1 meaning yes
 	//printf("12/10 hoping it gives 1, then would take away 1 to give 0");
-	printf("%d\n", ((5012-5000)/10)-1);
 
 	//Retrieve the sequence number of the packet:
-	uint16_t sequence_number = ((pcb->local_port - port)/10) - 1;
-
+	uint16_t sequence_number = get_seq_num_from_rdp_gbn_port(port);
 	//Retrieve actual port:
-	uint16_t actual_port = port - seq_num*10;
+	uint16_t actual_port = get_actual_port_from_rdp_gbn_port(port);
 
 	uchar ipaddr_network_order[4];
 	gHtonl(ipaddr_network_order, addr);
@@ -337,36 +341,84 @@ void rdp_gobackn_recv_callback (
 
     //The sequence number we are waiting on after having sent it
 	// int seq_num_expected = (old_seq_num+1)%MAX_N_CALLBACK;
+	uint16_t seq_num_expected = gbn_context->seq_start;
+	if(is_ack_packet) {
+    	// If it is an ack packet and for the sequence number we are waiting for then we update the context
+    	int pos = -1;
+    	for(int i=seq_num_expected; i != (seq_num_expected + gbn_context->num_pcb_stored-1)%MAX_N_CALLBACK; i = (i+1)%MAX_N_CALLBACK) {
+    		if(i == sequence_number) {
+    			pos = i;
+    		}
+    	}
+    	if(sequence_number == seq_num_expected) {
+    		pos = sequence_number;
+    	}
+    	printf("sequence_number: %d, expected_number: %d\n", sequence_number, seq_num_expected);
+    	printf("%d\n", pos);
+		if(pos != -1){
+			gbn_context->seq_start = (gbn_context->seq_start + (pos - seq_num_expected+1)) % MAX_N_CALLBACK;
+			gbn_context->num_pcb_stored = gbn_context->num_pcb_stored - (pos - seq_num_expected+1);
+			if(gbn_context->num_pcb_stored < MAX_N_CALLBACK) {
+				gbn_context->waiting = 0;
+			}
 
-	// //printf("seq_num is %d, seq_num_expected is %d", seq_num,seq_num_expected);
-	// if(is_ack_packet) {
- //    	//If it is an ack packet and for the sequence number we are waiting for then we update the context
-	// 	if(seq_num == seq_num_expected){
-	// 		if(gbn_context->waiting) {
-	// 			printf("Got acknowledgement.\n");
+			if(gbn_context->num_pcb_stored == 0) {
+    			//stop timer
+    			printf("Empty queue\n");
+			}
 
-	// 		}
-	// 		gbn_context->seq_start = (gbn_context->seq_start + 1) % MAX_N_CALLBACK;
-	// 		gbn_context->num_pcb_stored--;
-	// 		if(gbn_context->num_pcb_stored == 0) {
- //    			//stop timer
-	// 		}
-	// 	}
-	// }
+		}
+	}
+	//Otherwise we got a proper packet from someone else and should send an acknowledgement
+	else {
+    	//The packet has the next sequence number we were expecting
+    	printf("Expected: %d, Received: %d\n", gbn_context->seq_num_expected_to_recv, sequence_number);
+		if(sequence_number == gbn_context->seq_num_expected_to_recv) {
+    		//Update the sequence number we expect to receive after this
+			gbn_context->seq_num_expected_to_recv = (sequence_number + 1)%MAX_N_CALLBACK;
+			printf("Updated value expected: %d\n",gbn_context->seq_num_expected_to_recv );
+
+    		//Deliver the packet
+			printf("%s", (char *)p->payload);
+		}
+
+    	//Here we send back an ack packet to sender
+
+    	//Store our local port
+    	printf("local port: %d\n", pcb->local_port);
+		uint16_t local_port = pcb -> local_port;
+    	//add both an ack flag as well as the seq number to the port and make that our sending port
+		// pcb->local_port = add_seq_num_to_port(seq_num, add_ack_to_port(local_port));
+		pcb->local_port = add_seq_num_to_port(sequence_number, local_port);
+		pcb->local_port = add_ack_to_port(pcb->local_port);
+		// pcb -> local_port = pcb -> local_port + (sequence_number<<1) + 1;
+
+    	//Allocate new pbuf and set payload
+		char *payload = "ack!!!";
+		struct pbuf *ack_p = pbuf_alloc(PBUF_TRANSPORT, strlen(payload), PBUF_RAM);
+		ack_p->payload = payload;
+
+    	//Send the acknowledgement back to the sender
+    	print_pcb(pcb);
+		udp_send(pcb, ack_p);
+
+    	//Reset the local port to be our original one, so that it's clean for the next time.
+		pcb->local_port = local_port;
+	}
 }
 
 
 err_t rdp_gobackn_send (struct udp_pcb *pcb, struct pbuf *p){
 	//For now if the current port being used does not have a valid rdp port format (bits captured by mask should be 0)
-	//then hardcode the local port to be 5012
+	//then hardcode the local port to be 4096
 
 	int not_valid_rdp_port = pcb->local_port & RDP_VALID_RDP_PORT_MASK;
 	if(not_valid_rdp_port){
-		pcb->local_port = 5012;
+		pcb->local_port = 8192;
 	}
 
 	//Make sure to only proceed if we're not waiting for the queue to empty
-	if(snw_context->waiting) {
+	if(gbn_context->waiting) {
 		//If not then we refuse data
 		printf("Still waiting for queue of messages to free up. Try again later.");
 		return ERR_OK;
@@ -381,7 +433,7 @@ err_t rdp_gobackn_send (struct udp_pcb *pcb, struct pbuf *p){
 	//printf("updated sequence number in context should be 1, and is %d\n", gbn_context->next_seq_num);
 	//printf("do we need to wait? 1 yes, 0 no: %d\n", gbn_context->waiting);
 	//If that next_seq_num is back at 0, we must wait since the arrays are full
-	if (gbn_context->next_seq_num == 0) {
+	if (gbn_context->num_pcb_stored == MAX_N_CALLBACK) {
 		gbn_context->waiting = 1;
 	}
 
@@ -390,22 +442,22 @@ err_t rdp_gobackn_send (struct udp_pcb *pcb, struct pbuf *p){
 	//printf("the actual port is: %d\n", actual_port);
 
 	//hiding the seq num in the port:
-	pcb -> local_port = pcb -> local_port + 10*cur_seq_num;
+	pcb -> local_port = add_seq_num_to_port(cur_seq_num, actual_port);
 	//printf("changed port number, should be 5012+0=5012: %d", pcb -> local_port);
 
 	// //Store pcb into the context:
 	gbn_context->pcb[cur_seq_num] = *pcb;
+	// //Copy current payload into the context's payload array
+	gbn_context->payload[cur_seq_num] = p->payload;
 	 
 	//printf("checking port indeed 5012: %d\n",(gbn_context->pcb[cur_seq_num]).local_port);
 	 
-
 	// //Increase the field carrying the number of pcb's in the pcb array
 	gbn_context->num_pcb_stored = gbn_context -> num_pcb_stored + 1;
 
-	// //Copy current payload into the context's payload array
-	gbn_context->payload[cur_seq_num] = p->payload;
-
 	//send to udp
+	print_pcb(pcb);
+	printf("actual port %d\n", actual_port);
 	err_t err = udp_send(pcb,p);
 
 	//start the timer
