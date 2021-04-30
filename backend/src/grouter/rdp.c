@@ -362,7 +362,7 @@ void rdp_gobackn_recv_callback (
 
 			if(gbn_context->num_pcb_stored == 0) {
     			//stop timer
-    			printf("Empty queue\n");
+    			rdp_timer_reset(gbn_timer_context);
 			}
 
 		}
@@ -380,7 +380,6 @@ void rdp_gobackn_recv_callback (
     	//Here we send back an ack packet to sender
 
     	//Store our local port
-    	printf("local port: %d\n", pcb->local_port);
 		uint16_t local_port = pcb -> local_port;
     	//add both an ack flag as well as the seq number to the port and make that our sending port
 		// pcb->local_port = add_seq_num_to_port(seq_num, add_ack_to_port(local_port));
@@ -464,34 +463,27 @@ err_t rdp_gobackn_send (struct udp_pcb *pcb, struct pbuf *p){
 void rdp_gobackn_resend_packet (void *arg){
 	struct gobackn_context *context = (struct gobackn_context *) arg;
 
-	// //Retrive the pcb representing the connection from the context
-	// // struct udp_pcb *pcbArray[] = context->pcb;
-	// struct udp_pcb *pcb_array[MAX_N_CALLBACK];
-	// memcpy(pcb_array, context->pcb, MAX_N_CALLBACK);
-	// //Allocate a new pbuffer in which to resend the message
+	for(uint16_t i = context->seq_start; i != context->next_seq_num; i = (i+1)%MAX_N_CALLBACK) {
+		struct udp_pcb *pcb = context->pcb[i];
+		//Allocate a new pbuffer in which to resend the message
+		struct pbuf *p = pbuf_alloc(PBUF_TRANSPORT, strlen(context->payload[i]), PBUF_RAM);
+    	//copy the payload into a new buffer
+		char payload[DEFAULT_MTU];
+		strcpy(payload, context->payload[i]);
+		//Set the pbuf's payload
+		p->payload = payload;
 
-	// for(uint16_t i = context->seq_start; i != context->next_seq_num; i = (i+1)%MAX_N_CALLBACK) {
-	// 	struct udp_pcb *pcb = pcb_array[i];
+    	//Keep local port to be able to sanitize pcb after all of this
+		uint16_t actual_port = pcb->local_port;
+		//Add the sequence number that was last send to the port
+		pcb->local_port = add_seq_num_to_port(i, actual_port);
 
-	// 	struct pbuf *p = pbuf_alloc(PBUF_TRANSPORT, strlen(context->payload[i]), PBUF_RAM);
- //    	//copy the payload into a new buffer
-	// 	char payload[DEFAULT_MTU];
-	// 	strcpy(payload, context->payload[i]);
-	// 	//Set the pbuf's payload
-	// 	p->payload = payload;
+		//Resend the packet
+		udp_send(pcb, p);
 
-
- //    	//Keep local port to be able to sanitize pcb after all of this
-	// 	uint16_t actual_port = pcb->local_port;
-	// 	//Add the sequence number that was last send to the port
-	// 	pcb->local_port = add_seq_num_to_port(abs(gbn_context->next_seq_num -1)%2, actual_port);
-
-	// 	//Resend the packet
-	// 	udp_send(pcb, p);
-
-	// 	//Reset the pcb's local port to the actual port without the sequence number.
-	// 	pcb->local_port = actual_port;
-	// }
+		//Reset the pcb's local port to the actual port without the sequence number.
+		pcb->local_port = actual_port;
+	}
 
 }
 
@@ -506,6 +498,6 @@ void rdp_gobackn_shutdown (){
 	}
 	
 
-	// rdp_timer_shutdown(gbn_timer_context);
+	rdp_timer_shutdown(gbn_timer_context);
 
 }
