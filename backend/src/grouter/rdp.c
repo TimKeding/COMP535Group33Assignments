@@ -337,6 +337,7 @@ void rdp_gobackn_recv_callback (
 	uint16_t seq_num_expected = gbn_context->seq_start;
 	if(is_ack_packet) {
 		if(sequence_number == seq_num_expected){
+			printf("Got acknowledgement.\n");
 			gbn_context->seq_start = (gbn_context->seq_start + 1) % MAX_N_CALLBACK;
 			gbn_context->num_pcb_stored = gbn_context->num_pcb_stored - 1;
 			if(gbn_context->num_pcb_stored < MAX_N_CALLBACK) {
@@ -346,6 +347,7 @@ void rdp_gobackn_recv_callback (
 			if(gbn_context->num_pcb_stored == 0) {
     			rdp_timer_reset(gbn_timer_context);
 			}
+			printf("Queue size: %d\n", gbn_context->num_pcb_stored);
 
 		}
 	}
