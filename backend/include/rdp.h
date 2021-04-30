@@ -23,10 +23,18 @@ void			 rdp_init						(int window_size, long timeout);
  */
 uint16_t		 add_seq_num_to_port			(uint16_t seq_num, uint16_t port);
 
+/*
+* Same as above but for the GBN
+*/
+uint16_t         add_seq_num_to_gbn_port        (uint16_t seq_num, uint16_t port);
 /**
  * Parses out the port number from the RDP port number
  */
 uint16_t		 get_actual_port_from_rdp_port	(uint16_t rdp_port);
+/**
+ * Same as above but for the GBN
+ */
+uint16_t		 get_actual_port_from_gbn_port	(uint16_t rdp_port);
 
 /**
  * Returns a port number that now includes the ack flag
@@ -42,6 +50,8 @@ uint16_t		 get_ack_flag_from_rdp_port		(uint16_t rdp_port);
  * Parses out the sequence number from the RDP port number
  */
 uint16_t		 get_seq_num_from_rdp_port		(uint16_t rdp_port);	 
+
+uint16_t         get_seq_num_from_rdp_gbn_port  (uint16_t rdp_port);
 
 /**
  * To clean up the resources used by the rdp once the program is done. Takes care of freeing up any memory it needs to
