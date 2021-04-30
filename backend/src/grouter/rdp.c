@@ -443,19 +443,20 @@ err_t rdp_gobackn_send (struct udp_pcb *pcb, struct pbuf *p){
 	// //Copy current payload into the context's payload array
 	gbn_context->payload[cur_seq_num] = p->payload;
 	 
-	//printf("checking port indeed 5012: %d\n",(gbn_context->pcb[cur_seq_num]).local_port);
+	 //printf("checking port indeed 5012: %d\n",(gbn_context->pcb[cur_seq_num]).local_port);
 	 
-	// //Increase the field carrying the number of pcb's in the pcb array
-	gbn_context->num_pcb_stored = gbn_context -> num_pcb_stored + 1;
+	 // //Increase the field carrying the number of pcb's in the pcb array
+	 gbn_context->num_pcb_stored = gbn_context -> num_pcb_stored + 1;
 
-	//send to udp
+	// //send to udp
 	err_t err = udp_send(pcb,p);
 
 	//start the timer
 	rdp_timer_start(gbn_timer_context);
 
-	//reseting the port:
-	pcb->local_port = actual_port;
+	 //reseting the port:
+	 pcb->local_port = actual_port;
+	 printf("got here");
 
 	return err;
 }
@@ -464,12 +465,14 @@ void rdp_gobackn_resend_packet (void *arg){
 	struct gobackn_context *context = (struct gobackn_context *) arg;
 
 	for(uint16_t i = context->seq_start; i != context->next_seq_num; i = (i+1)%MAX_N_CALLBACK) {
-		struct udp_pcb *pcb = context->pcb[i];
+		struct udp_pcb *pcb = &(context->pcb[i]);
 		//Allocate a new pbuffer in which to resend the message
-		struct pbuf *p = pbuf_alloc(PBUF_TRANSPORT, strlen(context->payload[i]), PBUF_RAM);
+		/*TODO - segfault with line below*/
+		
+		struct pbuf *p = pbuf_alloc(PBUF_TRANSPORT, strlen(&(context->payload[i])), PBUF_RAM);
     	//copy the payload into a new buffer
 		char payload[DEFAULT_MTU];
-		strcpy(payload, context->payload[i]);
+		strcpy(payload, &(context->payload[i]));
 		//Set the pbuf's payload
 		p->payload = payload;
 
