@@ -23,10 +23,6 @@ void			 rdp_init						(int window_size, long timeout);
  */
 uint16_t		 add_seq_num_to_port			(uint16_t seq_num, uint16_t port);
 
-/*
-* Same as above but for the GBN
-*/
-uint16_t         add_seq_num_to_gbn_port        (uint16_t seq_num, uint16_t port);
 /**
  * Parses out the port number from the RDP port number
  */
