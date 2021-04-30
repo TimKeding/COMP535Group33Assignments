@@ -353,8 +353,6 @@ void rdp_gobackn_recv_callback (
     	if(sequence_number == seq_num_expected) {
     		pos = sequence_number;
     	}
-    	printf("sequence_number: %d, expected_number: %d\n", sequence_number, seq_num_expected);
-    	printf("%d\n", pos);
 		if(pos != -1){
 			gbn_context->seq_start = (gbn_context->seq_start + (pos - seq_num_expected+1)) % MAX_N_CALLBACK;
 			gbn_context->num_pcb_stored = gbn_context->num_pcb_stored - (pos - seq_num_expected+1);
@@ -372,12 +370,9 @@ void rdp_gobackn_recv_callback (
 	//Otherwise we got a proper packet from someone else and should send an acknowledgement
 	else {
     	//The packet has the next sequence number we were expecting
-    	printf("Expected: %d, Received: %d\n", gbn_context->seq_num_expected_to_recv, sequence_number);
 		if(sequence_number == gbn_context->seq_num_expected_to_recv) {
     		//Update the sequence number we expect to receive after this
 			gbn_context->seq_num_expected_to_recv = (sequence_number + 1)%MAX_N_CALLBACK;
-			printf("Updated value expected: %d\n",gbn_context->seq_num_expected_to_recv );
-
     		//Deliver the packet
 			printf("%s", (char *)p->payload);
 		}
@@ -399,7 +394,6 @@ void rdp_gobackn_recv_callback (
 		ack_p->payload = payload;
 
     	//Send the acknowledgement back to the sender
-    	print_pcb(pcb);
 		udp_send(pcb, ack_p);
 
     	//Reset the local port to be our original one, so that it's clean for the next time.
@@ -456,8 +450,6 @@ err_t rdp_gobackn_send (struct udp_pcb *pcb, struct pbuf *p){
 	gbn_context->num_pcb_stored = gbn_context -> num_pcb_stored + 1;
 
 	//send to udp
-	print_pcb(pcb);
-	printf("actual port %d\n", actual_port);
 	err_t err = udp_send(pcb,p);
 
 	//start the timer
