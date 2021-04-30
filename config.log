@@ -1,4 +1,4 @@
-file /home/affan/gini5/SConstruct,line 221:
+file /home/ftaoussi/gini5/SConstruct,line 221:
 	Configure(confdir = .sconf_temp)
 scons: Configure: Checking for C library readline... 
 scons: Configure: ".sconf_temp/conftest_0.c" is up to date.
