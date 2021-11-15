@@ -654,7 +654,7 @@ void gncCmd() {
         return;
 
     // TCP
-    if (strcmp(next_tok, "-u") != 0) {
+    if (strcmp(next_tok, "-u") != 0 && strcmp(next_tok, "-r") != 0) {
 
         // gnc -l <port>
         if (!strcmp(next_tok, "-l")) {
